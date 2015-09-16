@@ -27,8 +27,6 @@
 //  Based on work by Fabián Cañas and Gilly Dekel
 //
 
-#import "NKOColorPickerView.h"
-
 //NKOBrightnessView
 @interface NKOBrightnessView: UIView
 
@@ -44,6 +42,7 @@
 @end
 
 //NKOColorPickerView
+#import "NKOColorPickerView.h"
 
 CGFloat const NKOPickerViewGradientViewHeight           = 40.f;
 CGFloat const NKOPickerViewGradientTopMargin            = 20.f;
@@ -59,7 +58,7 @@ CGFloat const NKOPickerViewCrossHairshWidthAndHeight    = 38.f;
 }
 
 @property (nonatomic, strong) NKOBrightnessView *gradientView;
-@property (nonatomic, strong) UIImageView *brightnessIndicator;
+@property (nonatomic, strong) UIView *brightnessIndicator;
 @property (nonatomic, strong) UIImageView *hueSatImage;
 @property (nonatomic, strong) UIView *crossHairs;
 
@@ -76,6 +75,7 @@ CGFloat const NKOPickerViewCrossHairshWidthAndHeight    = 38.f;
         
         self->_color = color;
         self->_didChangeColorBlock = didChangeColorBlock;
+        self.backgroundColor = [UIColor clearColor];
     }
     
     return self;
@@ -96,6 +96,9 @@ CGFloat const NKOPickerViewCrossHairshWidthAndHeight    = 38.f;
     [self _updateBrightnessPosition];
     [self _updateGradientColor];
     [self _updateCrosshairPosition];
+    [self bringSubviewToFront:self->_brightnessIndicator];
+    [self bringSubviewToFront:self->_crossHairs];
+    
 }
 
 - (void)layoutSubviews
@@ -120,8 +123,6 @@ CGFloat const NKOPickerViewCrossHairshWidthAndHeight    = 38.f;
 - (void)setTintColor:(UIColor *)tintColor
 {
     self.hueSatImage.layer.borderColor = tintColor.CGColor;
-    self.gradientView.layer.borderColor = tintColor.CGColor;
-    self.brightnessIndicator.image = [[UIImage imageNamed:@"nko_brightness_guide"] nko_tintImageWithColor:tintColor];
 }
 
 - (void)setColor:(UIColor *)newColor
@@ -169,6 +170,14 @@ CGFloat const NKOPickerViewCrossHairshWidthAndHeight    = 38.f;
     brightnessPosition.x = (1.0-currentBrightness)*self.gradientView.frame.size.width + self.gradientView.frame.origin.x;
     brightnessPosition.y = self.gradientView.center.y;
     
+    if (isnan(brightnessPosition.x)) {
+        brightnessPosition.x = 0;
+    }
+
+    if (isnan(brightnessPosition.y)) {
+        brightnessPosition.y = 0;
+    }
+    
     self.brightnessIndicator.center = brightnessPosition;
 }
 
@@ -178,7 +187,15 @@ CGFloat const NKOPickerViewCrossHairshWidthAndHeight    = 38.f;
     
     hueSatPosition.x = (currentHue * self.hueSatImage.frame.size.width) + self.hueSatImage.frame.origin.x;
     hueSatPosition.y = (1.0-currentSaturation) * self.hueSatImage.frame.size.height + self.hueSatImage.frame.origin.y;
+
+    if (isnan(hueSatPosition.x)) {
+        hueSatPosition.x = 0;
+    }
     
+    if (isnan(hueSatPosition.y)) {
+        hueSatPosition.y = 0;
+    }
+
     self.crossHairs.center = hueSatPosition;
     [self _updateGradientColor];
 }
@@ -229,11 +246,7 @@ CGFloat const NKOPickerViewCrossHairshWidthAndHeight    = 38.f;
 
 - (UIColor*)_defaultTintColor
 {
-    UIWindow *window = [[[UIApplication sharedApplication] delegate] window];
-    if ([window respondsToSelector:@selector(tintColor)]) {
-        return [window tintColor];
-    }
-    return [UIColor whiteColor];
+    return [[[[UIApplication sharedApplication] delegate] window] tintColor];
 }
 
 #pragma mark - Touch Handling methods
@@ -258,7 +271,7 @@ CGFloat const NKOPickerViewCrossHairshWidthAndHeight    = 38.f;
 		[self _updateHueSatWithMovement:position];
 	}
     else if (CGRectContainsPoint(self.gradientView.frame, position)) {
-        self.brightnessIndicator.center = CGPointMake(position.x, self.gradientView.center.y);
+        self.brightnessIndicator.center = CGPointMake(MAX(position.x, self.gradientView.frame.origin.x + self.brightnessIndicator.frame.size.width / 2), self.gradientView.center.y);
 		[self _updateBrightnessWithMovement:position];
 	}
 }
@@ -336,21 +349,28 @@ CGFloat const NKOPickerViewCrossHairshWidthAndHeight    = 38.f;
     if (self->_crossHairs.superview == nil){
         [self insertSubview:self->_crossHairs aboveSubview:self.hueSatImage];
     }
-    
     return self->_crossHairs;
 }
 
-- (UIImageView*)brightnessIndicator
+- (UIView*)brightnessIndicator
 {
     if (self->_brightnessIndicator == nil){
-        self->_brightnessIndicator = [[UIImageView alloc] initWithFrame:CGRectMake(CGRectGetWidth(self.gradientView.frame)*0.5f,
-                                                                                   CGRectGetMinY(self.gradientView.frame)-4,
-                                                                                   NKOPickerViewBrightnessIndicatorWidth,
-                                                                                   NKOPickerViewBrightnessIndicatorHeight)];
+        self->_brightnessIndicator = [[UIView alloc] initWithFrame:CGRectMake(CGRectGetWidth(self.gradientView.frame)*0.5,
+                                                                     CGRectGetHeight(self.gradientView.frame)*0.5,
+                                                                     NKOPickerViewCrossHairshWidthAndHeight * 0.5,
+                                                                     NKOPickerViewCrossHairshWidthAndHeight)];
         
-        self->_brightnessIndicator.image = [[UIImage imageNamed:@"nko_brightness_guide"] nko_tintImageWithColor:[self _defaultTintColor]];
-        self->_brightnessIndicator.backgroundColor = [UIColor clearColor];
         self->_brightnessIndicator.autoresizingMask = UIViewAutoresizingNone;
+        
+        UIColor *edgeColor = [UIColor colorWithWhite:0.9 alpha:0.8];
+        
+        self->_brightnessIndicator.layer.cornerRadius = NKOPickerViewCrossHairshWidthAndHeight * 0.3;
+        self->_brightnessIndicator.layer.borderColor = edgeColor.CGColor;
+        self->_brightnessIndicator.layer.borderWidth = 2;
+        self->_brightnessIndicator.layer.shadowColor = [UIColor blackColor].CGColor;
+        self->_brightnessIndicator.layer.shadowOffset = CGSizeZero;
+        self->_brightnessIndicator.layer.shadowRadius = 1;
+        self->_brightnessIndicator.layer.shadowOpacity = 0.5f;
     }
     
     if (self->_brightnessIndicator.superview == nil){
@@ -359,7 +379,6 @@ CGFloat const NKOPickerViewCrossHairshWidthAndHeight    = 38.f;
     
     return self->_brightnessIndicator;
 }
-
 @end
 
 
